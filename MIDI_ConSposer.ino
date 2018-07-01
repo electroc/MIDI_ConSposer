@@ -1,99 +1,115 @@
 #include <MIDI.h>
+#include <Keypad.h>
 
-// Simple tutorial on how to receive and send MIDI messages.
-// Here, when receiving any message on channel 4, the Arduino
-// will blink a led and play back a note for 1 second.
 
 MIDI_CREATE_DEFAULT_INSTANCE();
 using namespace midi;
-static const unsigned ledPin = 13;      // LED pin on Arduino Uno
-//static const int CHANNEL_MIDI_DEVICE = MIDI_CHANNEL_OMNI; //        omni !!!!
-static const int CHANNEL_MIDI_DEVICE = 4; 
 
-unsigned int pitch_poti=0;
-unsigned int vel_poti=0;
+static const unsigned ledPin = 13;                                  // LED pin on Arduino Uno
+static const int CHANNEL_MIDI_DEVICE = MIDI_CHANNEL_OMNI; //        omni !!!!
+
+//static const int CHANNEL_MIDI_DEVICE = 4; 
+static const byte kp3midiport=16;
+
+unsigned int knob1val=0;
+unsigned int knob2val=0;
+unsigned int knob3val=0;
+unsigned int knob4val=0;
+unsigned int knob5val=0;
+unsigned int knob6val=0;
 
 unsigned int counter1=0;
-static const byte global_velo=126;
 
-static const byte pitch_poti_pin=A0;
-static const byte vel_poti_pin=A1;
 
-bool minusoktave;
-bool minusnote;
+static const byte knob1=A0;
+static const byte knob2=A1;
+static const byte knob3=A2;
+static const byte knob4=A3;
+static const byte knob5=A4;
+static const byte knob6=A5;
 
-static const byte oktave=6;
+static const byte light_senseD=4;
 
-static const byte noterange=11;
+static const byte button_D2=2;
+static const byte button_D3=3;
+static const byte button_D4=4;
+
+
+const byte ROWS = 4; //four rows
+const byte COLS = 4; //four columns
+//define the cymbols on the buttons of the keypads
+char hexaKeys[ROWS][COLS] = {
+  {'0','1','2','3'},
+  {'4','5','6','7'},
+  {'8','9','A','B'},
+  {'C','D','E','F'}
+};
+byte rowPins[ROWS] = {9, 8, 7, 6}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {10, 11, 12, 13}; //connect to the column pinouts of the keypad
+
+//initialize an instance of class NewKeypad
+Keypad customKeypad = Keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS); 
+
+
 
 void MyHandleNoteOn(byte channel, byte pitch, byte velocity) {
-
-  readPotis();
-  velocity=global_velo;
-
-  if(minusnote)pitch=pitch-vel_poti;
-  else pitch=pitch+vel_poti;
-  
-  if(minusoktave)pitch=pitch-(pitch_poti*oktave);
-  else pitch=pitch+(pitch_poti*oktave);
-
 
   MIDI.sendNoteOn(pitch, velocity, channel);
  }
 
 void MyHandleNoteOff(byte channel, byte pitch, byte velocity) { 
 
-  if(minusnote)pitch=pitch-vel_poti;
-  else pitch=pitch+vel_poti;
-  
-  if(minusoktave)pitch=pitch-(pitch_poti*oktave);
-  else pitch=pitch+(pitch_poti*oktave);
   MIDI.sendNoteOff(pitch, velocity, channel);
 }
 
-void readPotis(){
-  vel_poti=analogRead(vel_poti_pin);
-  
-  pitch_poti=analogRead(pitch_poti_pin);
-
-  if(pitch_poti<512)
-  {
-    minusoktave=true;
-    pitch_poti=map(pitch_poti,0,512,3,0);
-
-  }
-  else {
-    minusoktave=false;
-    pitch_poti=map(pitch_poti,512,1023,0,3);
-  }
-
-  if(vel_poti<512)
-  {
-    minusnote=true;
-    vel_poti=map(vel_poti,0,512,noterange,0);
-
-  }
-  else {
-    minusnote=false;
-    vel_poti=map(vel_poti,512,1023,0,noterange);
+void handlerControlChange(byte channel, byte number, byte value) {
+  // ZOOM BOARD -> KP3+
+  if(channel==1) {
+    if(number==73&&value==127) MIDI.sendNoteOn(36, 127, kp3midiport);
+    if(number==73&&value==0)   MIDI.sendNoteOn(36, 127, kp3midiport);
+    if(number==75&&value==127) MIDI.sendNoteOn(37, 127, kp3midiport);
+    if(number==75&&value==0)   MIDI.sendNoteOn(37, 127, kp3midiport);
+    if(number==76&&value==127) MIDI.sendNoteOn(38, 127, kp3midiport);
+    if(number==76&&value==0)   MIDI.sendNoteOn(38, 127, kp3midiport);
+    if(number==77&&value==127) MIDI.sendNoteOn(39, 127, kp3midiport);
+    if(number==77&&value==0)   MIDI.sendNoteOn(39, 127, kp3midiport);
+    else   MIDI.sendControlChange(number, value, channel);
+    MIDI.sendNoteOff(36, 0, kp3midiport);
+    MIDI.sendNoteOff(37, 0, kp3midiport);
+    MIDI.sendNoteOff(38, 0, kp3midiport);
+    MIDI.sendNoteOff(39, 0, kp3midiport);
   }
   
 }
 
+void readPoti(byte knob, unsigned int knob_value){
+  
+  knob_value=analogRead(knob);
+  return knob_value;
+  }
+
+void mapPoti(unsigned int knob_value){
+
+  knob_value=map(knob_value, 0, 1023,0, 126);
+  return knob_value;
+  
+}
 
 void setup()
 {
     pinMode(ledPin, OUTPUT);
-    pinMode(pitch_poti_pin, INPUT);
-    pinMode(vel_poti_pin, INPUT);
+    pinMode(button_D2, INPUT);
+    pinMode(button_D3, INPUT);
+    pinMode(button_D4, INPUT);
+
     MIDI.begin(CHANNEL_MIDI_DEVICE);                      // Launch MIDI and listen to channel 4
     MIDI.setHandleNoteOn(MyHandleNoteOn);
     MIDI.setThruFilterMode(0);
     // declare our MIDI-handlers.
-    // MIDI.setHandleControlChange(handlerControlChange);
+    MIDI.setHandleControlChange(handlerControlChange);
     //  MIDI.setHandleProgramChange(handlerProgramChange);
     MIDI.setHandleNoteOff(MyHandleNoteOff); // This command tells the Midi Library 
-    readPotis();
+
  /*   
     Serial.begin(9600);
     delay(2000);
@@ -115,20 +131,7 @@ void loop()
 {
   MIDI.read();
 
-    
-  /*
   
-    if (MIDI.read())                    // If we have received a message
-    {
-        digitalWrite(ledPin, HIGH);
-        MIDI.sendNoteOn(42, 127, 1);    // Send a Note (pitch 42, velo 127 on channel 1)
-        Serial.println("got midi");
-        
-        delay(1000);		            // Wait for a second
-        MIDI.sendNoteOff(42, 0, 1);     // Stop the note
-        digitalWrite(ledPin, LOW);
-        
-    }
-    */
+
 }
 
